@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -68,7 +69,7 @@ func parseData(data []byte) {
 
 	for _, route := range parsed {
 
-		if len(route.Ips) > 0 {
+		if len(route.Ips) > 0 && strings.Contains(route.ServiceArea, "Skype") {
 			fmt.Printf("\t%s: %d IPs\n", route.ServiceAreaDisplayName, len(route.Ips))
 
 			// for all the IPs it has
