@@ -4,7 +4,9 @@ A quick Go tool to grab the IPs for m365 services and print out a unique list, f
 Uses the data published on [endpoints.office.com](https://endpoints.office.com/) - see [here](http://aka.ms/ipurlws) for documentation. Example data is in [m365_routes.json](./examples/m365_routes.json).
 
 # Running
-Our [main.go](main.go) grabs the data from the endpoint, unmarshals the JSON, and creates a map of all the unique IPs for all the entries. It them writes them to [ms_routes.txt](./examples/ms_routes.txt). You can filter with one of `Exchange`, `Skype`, `SharePoint` or `Common`. Leave blank for all. `Skype` means `Skype and Teams`.
+Our [main.go](main.go) grabs the data from the endpoint, unmarshals the JSON, and creates a map of all the unique IPs for all the entries. It them writes them to a text file of comma separated values.
+
+You can filter with one of `Exchange`, `Skype`, `SharePoint` or `Common`. Leave blank for all. `Skype` means `Skype and Teams`.
 
 ```shell
 go run main.go -f Common
@@ -16,6 +18,8 @@ go run main.go -f Common
 2024/06/17 09:37:18 Wrote addresses to "20240617_093718_m365_routes_Common.txt"
 2024/06/17 09:37:18 Fin.
 ```
+
+See the [examples](./examples/).
 
 # Example with Wireguard
 First grab the data you want. E.g. to filter Teams calls from your VPN, run `go run main.go -f Skype`.
