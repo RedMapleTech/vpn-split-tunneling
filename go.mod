@@ -1,4 +1,4 @@
-module ms-routes
+module github.com/RedMapleTech/vpn-split-tunneling
 
 go 1.21.5
 
