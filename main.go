@@ -25,7 +25,7 @@ const (
 	timestampFormat = "20060102_150405"
 
 	// allowlist stuff
-	fileStart = "AllowedIPs = "
+	fileStart       = "AllowedIPs = "
 	ipv4RangeString = "0.0.0.0/0"
 	ipv6RangeString = "::/0"
 )
@@ -69,12 +69,27 @@ func main() {
 
 	// parse the received data
 	log.Println("Parsing data")
-	err = parseData(data, filter)
+	ips, err := parseData(data, filter)
 
 	if err != nil {
 		log.Fatalf("Failed to parse data: %q\n", err.Error())
 	}
 
+	// write the discovered routes to file
+	err = writeRoutesToFile(ips, filter)
+
+	if err != nil {
+		log.Fatalf("Failed to write routes file: %s\n", err.Error())
+	}
+
+	// write a Wireguard allow list from the discovered routes
+	err = outputWGAllowList(ips, filter)
+
+	if err != nil {
+		log.Fatalf("Failed to write Wireguard file: %s\n", err.Error())
+	}
+
+	// all done
 	log.Println("Fin.")
 }
 
@@ -103,13 +118,13 @@ func getData() ([]byte, error) {
 	return content, err
 }
 
-func parseData(data []byte, filter string) error {
+func parseData(data []byte, filter string) (map[string]bool, error) {
 	// unmarshal the JSON data
 	var parsed routeStruct
 	err := json.Unmarshal(data, &parsed)
 
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal JSON: %q", err.Error())
+		return nil, fmt.Errorf("failed to unmarshal JSON: %q", err.Error())
 	}
 
 	// map to store all unique IPs
@@ -139,22 +154,10 @@ func parseData(data []byte, filter string) error {
 		}
 	}
 
-	err = writeToFile(ips, filter)
-
-	if err != nil {
-		return err
-	}
-
-	err = outputWGAllowList(ips, filter)
-
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return ips, nil
 }
 
-func writeToFile(ips map[string]bool, filter string) error {
+func writeRoutesToFile(ips map[string]bool, filter string) error {
 	// create the file
 	filename := fmt.Sprintf("%s_m365_routes_%s.txt", time.Now().Format(timestampFormat), filter)
 	f, err := os.Create(filename)
@@ -162,6 +165,8 @@ func writeToFile(ips map[string]bool, filter string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create file %q: %s", filename, err.Error())
 	}
+
+	defer f.Close()
 
 	// write the IPs to file
 	w := bufio.NewWriter(f)
@@ -174,6 +179,7 @@ func writeToFile(ips map[string]bool, filter string) error {
 	w.Flush()
 	f.Close()
 	log.Printf("Wrote addresses to %q\n", filename)
+
 	return nil
 }
 
@@ -191,34 +197,40 @@ func outputWGAllowList(ips map[string]bool, filter string) error {
 
 	// build the IP set
 	var b netipx.IPSetBuilder
+
+	// start with the whole v4 and v6 address space
 	b.AddPrefix(netip.MustParsePrefix(ipv4RangeString))
 	b.AddPrefix(netip.MustParsePrefix(ipv6RangeString))
 
+	// for each IP range we got
 	for ip := range ips {
+		// parse it as a prefix
 		prefix, err := netip.ParsePrefix(ip)
 
 		if err != nil {
 			log.Printf("Error parsing input %q as range: %s. Skipping it...", ip, err.Error())
 		} else {
-			//log.Printf("Removing %q\n", prefix)
+			// remove this range from our set
 			b.RemovePrefix(prefix)
 		}
 	}
 
+	// build the set
 	s, _ := b.IPSet()
+
+	// collate them all as strings
 	var prefixStrings []string
-	
+
 	for _, r := range s.Ranges() {
 		prefixes := r.Prefixes()
 
 		for _, p := range prefixes {
-			//fmt.Printf("\t%s\n", p.String())
 			prefixStrings = append(prefixStrings, p.String())
 		}
 	}
 
+	// write out the collated prefixes
 	outFile.WriteString(strings.Join(prefixStrings, ", "))
-
 	log.Printf("Wrote wireguard allowlist to %q\n", filename)
 
 	return nil
