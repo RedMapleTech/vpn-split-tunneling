@@ -177,7 +177,6 @@ func writeRoutesToFile(ips map[string]bool, filter string) error {
 
 	// tidy up
 	w.Flush()
-	f.Close()
 	log.Printf("Wrote addresses to %q\n", filename)
 
 	return nil
