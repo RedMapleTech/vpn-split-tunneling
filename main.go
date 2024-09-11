@@ -182,7 +182,9 @@ func writeRoutesToFile(ips map[string]bool, filter string) error {
 	return nil
 }
 
-func outputWGAllowList(ips map[string]bool, filter string) error {
+// Use the IPs to calculate and output a Wireguard allowlist
+// This is the entire IPv4 and v6 address ranges, minus any addresses discovered from Microsoft.
+func outputWGAllowList(discoveredIPs map[string]bool, filter string) error {
 	// make the file
 	filename := fmt.Sprintf("%s_wireguard_allowList_%s.txt", time.Now().Format(timestampFormat), filter)
 	outFile, err := os.Create(filename)
@@ -195,14 +197,14 @@ func outputWGAllowList(ips map[string]bool, filter string) error {
 	outFile.WriteString(fileStart)
 
 	// build the IP set
-	var b netipx.IPSetBuilder
+	var ipSetBuilder netipx.IPSetBuilder
 
 	// start with the whole v4 and v6 address space
-	b.AddPrefix(netip.MustParsePrefix(ipv4RangeString))
-	b.AddPrefix(netip.MustParsePrefix(ipv6RangeString))
+	ipSetBuilder.AddPrefix(netip.MustParsePrefix(ipv4RangeString))
+	ipSetBuilder.AddPrefix(netip.MustParsePrefix(ipv6RangeString))
 
 	// for each IP range we got
-	for ip := range ips {
+	for ip := range discoveredIPs {
 		// parse it as a prefix
 		prefix, err := netip.ParsePrefix(ip)
 
@@ -210,17 +212,17 @@ func outputWGAllowList(ips map[string]bool, filter string) error {
 			log.Printf("Error parsing input %q as range: %s. Skipping it...", ip, err.Error())
 		} else {
 			// remove this range from our set
-			b.RemovePrefix(prefix)
+			ipSetBuilder.RemovePrefix(prefix)
 		}
 	}
 
 	// build the set
-	s, _ := b.IPSet()
+	set, _ := ipSetBuilder.IPSet()
 
 	// collate them all as strings
 	var prefixStrings []string
 
-	for _, r := range s.Ranges() {
+	for _, r := range set.Ranges() {
 		prefixes := r.Prefixes()
 
 		for _, p := range prefixes {
