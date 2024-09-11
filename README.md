@@ -1,5 +1,5 @@
 # Overview
-A quick Go tool to grab the IPs for m365 services and print out a unique list, for calculating split tunnel VPN configuration that doesn't push e.g. Teams down the VPN.
+A quick Go tool to grab the IPs for m365 services and print out a unique list, for calculating split tunnel VPN configuration that doesn't push e.g. Teams down the VPN. Now also outputs a Wireguard formatted allowlist.
 
 Uses the data published on [endpoints.office.com](https://endpoints.office.com/) - see [here](http://aka.ms/ipurlws) for documentation. Example data is in [m365_routes.json](./examples/m365_routes.json).
 
@@ -21,14 +21,25 @@ go run main.go -f Common
 
 See the [examples](./examples/).
 
-# Example with Wireguard
-First grab the data you want. E.g. to filter Teams calls from your VPN, run `go run main.go -f Skype`.
+## Now with Wireguard output
+Following the example from [this site](https://www.procustodibus.com/blog/2021/03/wireguard-allowedips-calculator/), it now outputs a Wireguard allowlist. This is the entire IPv4 and v6 address ranges, minus any addresses discovered from Microsoft.
 
-You can add the data to [Allowed IPs calculator](https://www.procustodibus.com/blog/2021/03/wireguard-allowedips-calculator/) to create an allow/blocklist:
+For example, a Wireguard allowlist that blocks all the addresses returned for Teams/Skype:
 
-![WIREGUARD ALLOWEDIPS CALCULATOR](assets/2024-06-14-17-08-25.png)
+```
+go run main.go -f Skype
+2024/09/11 13:28:05 Getting data from https://endpoints.office.com/endpoints/worldwide?clientRequestId=d727e157-a04b-4828-ac62-9d55a5ea3090
+2024/09/11 13:28:05 Parsing data
+        Microsoft Teams 11: 3 IPs
+        Microsoft Teams 12: 11 IPs
+2024/09/11 13:28:05 Wrote addresses to "20240911_132805_m365_routes_Skype.txt"
+2024/09/11 13:28:05 Wrote wireguard allowlist to "20240911_132805_wireguard_allowList_Skype.txt"
+2024/09/11 13:28:05 Fin.
+```
 
-This gives us [allowed_teams_only.txt](./examples/allowed_teams_only.txt).
+Produces this:
 
-Note trying to filter on all does come with a perfomance hit, presumably because of the huge routing table it creates!
+```
+AllowedIPs = 0.0.0.0/3, 32.0.0.0/4, 48.0.0.0/6, 52.0.0.0/10, 52.64.0.0/11, 52.96.0.0/12, 52.116.0.0/14, 52.120.0.0/15, 52.124.0.0/14, 52.128.0.0/10, 52.192.0.0/11, 52.224.0.0/13, 52.232.0.0/14, 52.236.0.0/15, 52.238.0.0/18, 52.238.64.0/19, 52.238.96.0/20, 52.238.112.0/22, 52.238.116.0/23, 52.238.118.0/24, 52.238.119.0/25...
+```
 

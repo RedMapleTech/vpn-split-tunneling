@@ -8,11 +8,13 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/netip"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"go4.org/netipx"
 )
 
 const (
@@ -21,6 +23,11 @@ const (
 
 	all             = "all"
 	timestampFormat = "20060102_150405"
+
+	// allowlist stuff
+	fileStart = "AllowedIPs = "
+	ipv4RangeString = "0.0.0.0/0"
+	ipv6RangeString = "::/0"
 )
 
 // thanks https://transform.tools/json-to-go
@@ -134,7 +141,17 @@ func parseData(data []byte, filter string) error {
 
 	err = writeToFile(ips, filter)
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	err = outputWGAllowList(ips, filter)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func writeToFile(ips map[string]bool, filter string) error {
@@ -157,5 +174,52 @@ func writeToFile(ips map[string]bool, filter string) error {
 	w.Flush()
 	f.Close()
 	log.Printf("Wrote addresses to %q\n", filename)
+	return nil
+}
+
+func outputWGAllowList(ips map[string]bool, filter string) error {
+	// make the file
+	filename := fmt.Sprintf("%s_wireguard_allowList_%s.txt", time.Now().Format(timestampFormat), filter)
+	outFile, err := os.Create(filename)
+
+	if err != nil {
+		return fmt.Errorf("failed to make output file: %s", err.Error())
+	}
+
+	defer outFile.Close()
+	outFile.WriteString(fileStart)
+
+	// build the IP set
+	var b netipx.IPSetBuilder
+	b.AddPrefix(netip.MustParsePrefix(ipv4RangeString))
+	b.AddPrefix(netip.MustParsePrefix(ipv6RangeString))
+
+	for ip := range ips {
+		prefix, err := netip.ParsePrefix(ip)
+
+		if err != nil {
+			log.Printf("Error parsing input %q as range: %s. Skipping it...", ip, err.Error())
+		} else {
+			//log.Printf("Removing %q\n", prefix)
+			b.RemovePrefix(prefix)
+		}
+	}
+
+	s, _ := b.IPSet()
+	var prefixStrings []string
+	
+	for _, r := range s.Ranges() {
+		prefixes := r.Prefixes()
+
+		for _, p := range prefixes {
+			//fmt.Printf("\t%s\n", p.String())
+			prefixStrings = append(prefixStrings, p.String())
+		}
+	}
+
+	outFile.WriteString(strings.Join(prefixStrings, ", "))
+
+	log.Printf("Wrote wireguard allowlist to %q\n", filename)
+
 	return nil
 }
