@@ -2,18 +2,14 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"net/netip"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"go4.org/netipx"
 )
 
@@ -60,23 +56,42 @@ func main() {
 		os.Exit(-1)
 	}
 
-	// get the data from the endpoint
-	data, err := getData()
+	// get all the MS IPs
+	ips, err := getMicrosoftIPs(filter)
 
 	if err != nil {
-		log.Fatalf("Failed to get data: %s\n", err.Error())
+		log.Fatalf("Failed to get IPs from Microsoft: %q\n", err.Error())
 	}
 
-	// parse the received data
-	log.Println("Parsing data")
-	ips, err := parseData(data, filter)
-
-	if err != nil {
-		log.Fatalf("Failed to parse data: %q\n", err.Error())
-	}
+	log.Printf("Got %d IP addresses from Microsoft\n", len(ips))
 
 	// write the discovered routes to file
 	err = writeRoutesToFile(ips, filter)
+
+	if err != nil {
+		log.Fatalf("Failed to write routes file: %s\n", err.Error())
+	}
+
+	// get all the GitHub IPs
+	gitHubIPs, err := getGitHubIPs()
+
+	if err != nil {
+		log.Fatalf("Failed to get IPs from GitHub: %q\n", err.Error())
+	}
+
+	log.Printf("Got %d IP addresses from GitHub\n", len(gitHubIPs))
+
+	// add them in
+	for ip := range gitHubIPs {
+		_, ok := ips[ip]
+
+		if !ok {
+			ips[ip] = true
+		}
+	}
+
+	// write the discovered routes to file
+	err = writeRoutesToFile(gitHubIPs, "GitHub")
 
 	if err != nil {
 		log.Fatalf("Failed to write routes file: %s\n", err.Error())
@@ -93,73 +108,9 @@ func main() {
 	log.Println("Fin.")
 }
 
-func getData() ([]byte, error) {
-	// prep the URL
-	uuid := uuid.New()
-	url := fmt.Sprintf("%s%s", apiURL, uuid.String())
-	log.Printf("Getting data from %s\n", url)
-
-	// get the data
-	resp, err := http.Get(url)
-
-	if err != nil {
-		return nil, err
-	}
-
-	// read the data from the response body
-	var content []byte
-	content, err = io.ReadAll(resp.Body)
-	resp.Body.Close()
-
-	if len(content) == 0 {
-		return nil, fmt.Errorf("failed to get any data")
-	}
-
-	return content, err
-}
-
-func parseData(data []byte, filter string) (map[string]bool, error) {
-	// unmarshal the JSON data
-	var parsed routeStruct
-	err := json.Unmarshal(data, &parsed)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal JSON: %q", err.Error())
-	}
-
-	// map to store all unique IPs
-	ips := make(map[string]bool)
-
-	// for all the routes in the struct
-	for _, route := range parsed {
-		// we don't care about entries without an IP
-		if len(route.Ips) > 0 {
-			{
-				// if we're including all or it matches the filter
-				if filter == all || strings.Contains(route.ServiceArea, filter) {
-					fmt.Printf("\t%s %d: %d IPs\n", route.ServiceAreaDisplayName, route.ID, len(route.Ips))
-
-					// for all the IPs it has
-					for _, i := range route.Ips {
-
-						// add it to the map if we don't have it already
-						_, ok := ips[i]
-
-						if !ok {
-							ips[i] = true
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return ips, nil
-}
-
-func writeRoutesToFile(ips map[string]bool, filter string) error {
+func writeRoutesToFile(ips map[string]bool, fileType string) error {
 	// create the file
-	filename := fmt.Sprintf("%s_m365_routes_%s.txt", time.Now().Format(timestampFormat), filter)
+	filename := fmt.Sprintf("%s_m365_routes_%s.txt", time.Now().Format(timestampFormat), fileType)
 	f, err := os.Create(filename)
 
 	if err != nil {
@@ -209,7 +160,16 @@ func outputWGAllowList(discoveredIPs map[string]bool, filter string) error {
 		prefix, err := netip.ParsePrefix(ip)
 
 		if err != nil {
-			log.Printf("Error parsing input %q as range: %s. Skipping it...", ip, err.Error())
+			// try as an address
+			add, err := netip.ParseAddr(ip)
+
+			if err != nil {
+				log.Printf("Error parsing input %q as range or address: %s. Skipping it...", ip, err.Error())
+			} else {
+				// remove this range from our set
+				ipSetBuilder.Remove(add)
+			}
+
 		} else {
 			// remove this range from our set
 			ipSetBuilder.RemovePrefix(prefix)
