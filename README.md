@@ -1,5 +1,5 @@
 # Overview
-A quick Go tool to grab the IPs for m365 services and print out a unique list, for calculating split tunnel VPN configuration that doesn't push e.g. Teams down the VPN. Now also outputs a Wireguard formatted allowlist.
+A quick Go tool to grab the IPs for Microsoft services (M365 and GitHub) and print out a unique list, for calculating split tunnel VPN configuration that doesn't push e.g. Teams down the VPN. Now also outputs a Wireguard formatted allowlist.
 
 Uses the data published on [endpoints.office.com](https://endpoints.office.com/) - see [here](http://aka.ms/ipurlws) for documentation. Example data is in [m365_routes.json](./examples/m365_routes.json).
 
@@ -9,7 +9,7 @@ Our [main.go](main.go) grabs the data from the endpoint, unmarshals the JSON, an
 You can filter with one of `Exchange`, `Skype`, `SharePoint` or `Common`. Leave blank for all. `Skype` means `Skype and Teams`.
 
 ```shell
-go run main.go -f Common
+go run *.go -f Common
 2024/06/17 09:37:18 Getting data from https://endpoints.office.com/endpoints/worldwide?clientRequestId=b9dd4f30-2d30-42c1-8ada-cc26221351e2
 2024/06/17 09:37:18 Parsing data
         Microsoft 365 Common and Office Online 46: 20 IPs
@@ -27,14 +27,18 @@ Following the example from [this site](https://www.procustodibus.com/blog/2021/0
 For example, a Wireguard allowlist that blocks all the addresses returned for Teams/Skype:
 
 ```
-go run main.go -f Skype
-2024/09/11 13:28:05 Getting data from https://endpoints.office.com/endpoints/worldwide?clientRequestId=d727e157-a04b-4828-ac62-9d55a5ea3090
-2024/09/11 13:28:05 Parsing data
+2024/10/22 16:25:30 Getting data from https://endpoints.office.com/endpoints/worldwide?clientRequestId=79c715a9-5a31-4d01-83d9-23295af0857f
+2024/10/22 16:25:31 Parsing data
         Microsoft Teams 11: 3 IPs
         Microsoft Teams 12: 11 IPs
-2024/09/11 13:28:05 Wrote addresses to "20240911_132805_m365_routes_Skype.txt"
-2024/09/11 13:28:05 Wrote wireguard allowlist to "20240911_132805_wireguard_allowList_Skype.txt"
-2024/09/11 13:28:05 Fin.
+2024/10/22 16:25:31 Got 11 IP addresses from Microsoft
+2024/10/22 16:25:31 Wrote addresses to "20241022_162531_m365_routes_Skype.txt"
+2024/10/22 16:25:31 Getting data from https://api.github.com/meta
+2024/10/22 16:25:31 Parsing data
+2024/10/22 16:25:31 Got 103 IP addresses from GitHub
+2024/10/22 16:25:31 Wrote addresses to "20241022_162531_m365_routes_GitHub.txt"
+2024/10/22 16:25:31 Wrote wireguard allowlist to "20241022_162531_wireguard_allowList_Skype.txt"
+2024/10/22 16:25:31 Fin.
 ```
 
 Produces this:
